@@ -1,96 +1,99 @@
-package antagonist
+package relay
 
 import (
 	"errors"
 	"net"
 
+	"strconv"
+
+	"sync"
+
 	"github.com/sorcix/irc"
 )
 
+const (
+	successfulRegistration = "successfull registration"
+)
+
 var (
-	// ErrJoinNotEnoughChannels ...
+	// ErrJoinNotEnoughChannels is returned by Join if it
+	// will be called without single channel as an argument.
 	ErrJoinNotEnoughChannels = errors.New("antagonist: join not enough channels")
 )
 
-// ClientOpts ...
+// User ...
+type User struct {
+	Nick     string
+	Password string
+	Mode     rune
+	RealName string
+}
+
+// ClientOpts represent optional values that can be pass to the client.
 type ClientOpts struct {
 	Logger              StdLogger
-	UserNick            string
-	UserPassword        string
-	UserMode            rune
-	UserRealName        string
 	RequestInterceptor  func(*irc.Message) error
 	ResponseInterceptor func(*irc.Message) error
 }
 
-// Client ...
+// Client represents connection and logic that corresponds to single IRC server.
+// It can be used to make requests.
 type Client struct {
-	userNick            string
-	userPassword        string
-	userMode            rune
-	userRealName        string
+	User                *User
 	remoteAddr          net.Addr
 	localAddr           net.Addr
 	requestInterceptor  func(*irc.Message) error
 	responseInterceptor func(*irc.Message) error
-	fatal               chan error
+	err                 chan error
 	reg                 chan bool
+	isRegisteredLock    sync.RWMutex
+	isRegistered        bool
 	connection          *irc.Conn
 	logger              StdLogger
+	handler             Handler
 }
 
 // NewClient ...
-func NewClient(conn net.Conn, options ClientOpts) *Client {
-	return &Client{
-		userNick:            options.UserNick,
-		userPassword:        options.UserPassword,
-		userMode:            options.UserMode,
-		userRealName:        options.UserRealName,
-		remoteAddr:          conn.RemoteAddr(),
-		localAddr:           conn.LocalAddr(),
-		requestInterceptor:  options.RequestInterceptor,
-		responseInterceptor: options.ResponseInterceptor,
-		connection:          irc.NewConn(conn),
-		logger:              options.Logger,
-		fatal:               make(chan error, 1),
-		reg:                 make(chan bool, 1),
-	}
+func NewClient(conn net.Conn, user *User) *Client {
+	return NewClientWithOpts(conn, user, nil)
 }
 
-// Handle ...
+// NewClientWithOpts ...
+func NewClientWithOpts(conn net.Conn, user *User, options *ClientOpts) *Client {
+	c := &Client{
+		User:       user,
+		remoteAddr: conn.RemoteAddr(),
+		localAddr:  conn.LocalAddr(),
+		connection: irc.NewConn(conn),
+		err:        make(chan error, 1000000),
+		reg:        make(chan bool, 1),
+	}
+
+	if options != nil {
+		c.requestInterceptor = options.RequestInterceptor
+		c.responseInterceptor = options.ResponseInterceptor
+		c.logger = options.Logger
+	}
+
+	return c
+}
+
+// ListenAndReply listens for IRC messages on TCP connection
+// and handle them with provided handler. If no handler is passed it panics.
+func (c *Client) ListenAndReply() {
+	if c.handler == nil {
+		panic("antagonist: handler is nil")
+	}
+
+	go c.listen(c.handler)
+}
+
+// Handle sets handler for the client.
 func (c *Client) Handle(h Handler) {
-	go c.listen(h)
-
-	if err := c.Encode(&irc.Message{
-		Command: irc.PASS,
-		Params:  []string{c.userPassword},
-	}); err != nil {
-		c.fatal <- err
-	} else {
-		c.logger.Print("Message PASS has been send.")
-	}
-
-	if err := c.Encode(&irc.Message{
-		Command: irc.USER,
-		Params:  []string{c.userNick, string(c.userMode), "*", ":" + c.userRealName},
-	}); err != nil {
-		c.fatal <- err
-	} else {
-		c.logger.Print("Message USER has been send.")
-	}
-
-	if err := c.Encode(&irc.Message{
-		Command: irc.NICK,
-		Params:  []string{c.userNick},
-	}); err != nil {
-		c.fatal <- err
-	} else {
-		c.logger.Print("Message NICK has been send.")
-	}
+	c.handler = h
 }
 
 func (c *Client) listen(h Handler) {
-
 	for {
 		message, err := c.connection.Decode()
 		if c.requestInterceptor != nil {
@@ -100,34 +103,48 @@ func (c *Client) listen(h Handler) {
 			}
 		}
 		if err != nil {
-			c.fatal <- err
+			c.err <- err
 			break
 		}
 
+		logIncomingMessage(c.logger, message)
+
 		switch message.Command {
 		case irc.PING:
-			if err := c.Encode(&irc.Message{
-				Command: irc.PONG,
-			}); err != nil {
-				c.fatal <- err
+			pong := &irc.Message{
+				Command:  irc.PONG,
+				Trailing: message.Trailing,
+			}
+			if err := c.Encode(pong); err != nil {
+				c.err <- err
 			}
 		case irc.MODE, irc.RPL_WELCOME:
-			c.logger.Print("User has been registered successfully.")
-			c.reg <- true
+			if !c.IsRegistered() {
+				c.isRegisteredLock.Lock()
+				c.isRegistered = true
+				c.isRegisteredLock.Unlock()
+
+				log(c.logger, successfulRegistration)
+				c.reg <- true
+			}
 		default:
-			request := &Request{
-				Message:    message,
-				RemoteAddr: c.remoteAddr,
-				LocalAddr:  c.localAddr,
+			if IsErrorCommand(message.Command) {
+				c.err <- &ErrorMessage{
+					Message: message,
+				}
+
+				return
 			}
 
-			if len(message.Params) > 0 {
-				request.Channel = message.Params[0]
-			} else {
-				request.Channel = "<unknown>"
-			}
+			if c.IsRegistered() {
+				request := &Request{
+					Message:    message,
+					RemoteAddr: c.remoteAddr,
+					LocalAddr:  c.localAddr,
+				}
 
-			h.ServeIRC(newMessageWriter(c.connection), request)
+				h.ServeIRC(newMessageWriter(c.connection), request)
+			}
 		}
 	}
 }
@@ -137,35 +154,43 @@ func (c *Client) Registered() <-chan bool {
 	return c.reg
 }
 
-// Err ...
-func (c *Client) Err() <-chan error {
-	return c.fatal
+// IsRegistered ...
+func (c *Client) IsRegistered() bool {
+	c.isRegisteredLock.RLock()
+	defer c.isRegisteredLock.RUnlock()
+
+	return c.isRegistered
 }
 
-// Encode ...
+// Err returns channel
+func (c *Client) Err() <-chan error {
+	return c.err
+}
+
+// Encode writes the IRC encoding of irc.Message to the stream.
+// Its wrapper for irc.Encoder.Encode method.
 func (c *Client) Encode(message *irc.Message) error {
+	logOutgoingMessage(c.logger, message)
+
 	return c.connection.Encode(message)
 }
 
-// Join ...
-func (c *Client) Join(channels ...string) {
+// Join sends JOIN message to the IRC server with given channels.
+func (c *Client) Join(channels ...*Channel) error {
 	if len(channels) == 0 {
-		c.fatal <- ErrJoinNotEnoughChannels
-		return
+		return ErrJoinNotEnoughChannels
 	}
 
-	message := irc.Message{
-		Command: irc.JOIN,
+	return c.Encode(JoinMessage(channels...))
+}
+
+// IsErrorCommand checks if given command reports an error.
+// TODO: replace with map
+func IsErrorCommand(c string) bool {
+	cmd, err := strconv.ParseInt(c, 10, 64)
+	if err == nil {
+		return (cmd > 400 && cmd < 503) || (cmd > 903 && cmd < 908)
 	}
 
-	for _, ch := range channels {
-		message.Params = append(message.Params, ch)
-	}
-
-	err := c.Encode(&message)
-	if err != nil {
-		c.fatal <- err
-	} else {
-		c.logger.Print("Message JOIN has been send.")
-	}
+	return false
 }

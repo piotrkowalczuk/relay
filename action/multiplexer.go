@@ -1,6 +1,6 @@
 package action
 
-import "github.com/piotrkowalczuk/antagonist"
+import "github.com/piotrkowalczuk/relay"
 
 type handlers struct {
 	handler Handler
@@ -10,8 +10,8 @@ type handlers struct {
 // ServeMux ...
 type ServeMux struct {
 	handlers          map[string]handlers
-	notFoundHandler   antagonist.Handler
-	badRequestHandler antagonist.Handler
+	notFoundHandler   relay.Handler
+	badRequestHandler relay.Handler
 }
 
 // NewServeMux ...
@@ -30,17 +30,17 @@ func (sm *ServeMux) Handle(method string, params Params, handler Handler) {
 }
 
 // NotFound ...
-func (sm *ServeMux) NotFound(h antagonist.Handler) {
+func (sm *ServeMux) NotFound(h relay.Handler) {
 	sm.notFoundHandler = h
 }
 
 // BadRequest ...
-func (sm *ServeMux) BadRequest(h antagonist.Handler) {
+func (sm *ServeMux) BadRequest(h relay.Handler) {
 	sm.badRequestHandler = h
 }
 
 // ServeIRC ...
-func (sm *ServeMux) ServeIRC(mw antagonist.MessageWriter, r *antagonist.Request) {
+func (sm *ServeMux) ServeIRC(mw relay.MessageWriter, r *relay.Request) {
 	cmd, err := NewCommand(r.Trailing)
 	if err != nil {
 		if sm.badRequestHandler != nil {

@@ -1,4 +1,4 @@
-package antagonist
+package relay
 
 // Params ...
 type Params []string
@@ -14,15 +14,17 @@ func (p *Params) index(param string) int {
 }
 
 // Set ...
-func (p *Params) Set(param string) {
-	i := p.index(param)
-	if i != -1 {
-		(*p)[i] = param
+func (p *Params) Set(params ...string) {
+	for _, param := range params {
+		i := p.index(param)
+		if i != -1 {
+			(*p)[i] = param
 
-		return
+			continue
+		}
+
+		*p = append(*p, param)
 	}
-
-	*p = append(*p, param)
 }
 
 // Del ...

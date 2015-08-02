@@ -1,4 +1,4 @@
-package antagonist
+package relay
 
 // Handler is a basic wrapper for ServeIRC method.
 type Handler interface {

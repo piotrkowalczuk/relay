@@ -6,9 +6,9 @@ import (
 )
 
 var (
-	// ErrActionToShort is returned when incoming payload is to short.
-	// To build Action struct it needs to be at least 2 characters long.
-	// Shortest possible command is eg. !a
+// ErrActionToShort is returned when incoming payload is to short.
+// To build Action struct it needs to be at least 2 characters long.
+// Shortest possible command is eg. !a
 	ErrActionToShort = errors.New("antagonist/action: raw command too short, should have at least 2 characters")
 )
 

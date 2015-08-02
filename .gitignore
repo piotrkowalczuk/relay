@@ -23,5 +23,5 @@ _testmain.go
 *.test
 *.prof
 
-antagonist.iml
+relay.iml
 .idea

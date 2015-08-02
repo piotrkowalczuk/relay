@@ -1,4 +1,4 @@
-package antagonist
+package relay
 
 import (
 	"io"
@@ -6,7 +6,7 @@ import (
 	"github.com/sorcix/irc"
 )
 
-// MessageWriter interface is used by an Handler to construct an IRC message.
+// MessageWriter interface is used by a Handler to construct an IRC message.
 type MessageWriter interface {
 	// Params returns the param slice that will be sent.
 	// Changing the params after a call to Write has no effect.
@@ -17,6 +17,7 @@ type MessageWriter interface {
 	Write([]byte) (int, error)
 	// WriteCommand sets IRC message command type, irc.PRIVMSG by default.
 	WriteCommand(string)
+	WriteParams(...string)
 }
 
 type messageWriter struct {
@@ -50,6 +51,15 @@ func (mw *messageWriter) Write(b []byte) (int, error) {
 
 func (mw *messageWriter) WriteCommand(command string) {
 	mw.command = command
+}
+
+func (mw *messageWriter) WriteParams(params ...string) {
+	ps := make(Params, 0, len(params))
+	for _, p := range params {
+		ps.Set(p)
+	}
+
+	mw.params = &ps
 }
 
 func (mw *messageWriter) Params() *Params {

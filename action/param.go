@@ -3,7 +3,7 @@ package action
 import "errors"
 
 var (
-	// ErrEmptyInput ...
+// ErrEmptyInput ...
 	ErrEmptyInput = errors.New("antagonist/action: empty input")
 )
 
