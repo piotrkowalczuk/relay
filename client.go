@@ -18,7 +18,7 @@ const (
 var (
 	// ErrJoinNotEnoughChannels is returned by Join if it
 	// will be called without single channel as an argument.
-	ErrJoinNotEnoughChannels = errors.New("antagonist: join not enough channels")
+	ErrJoinNotEnoughChannels = errors.New("relay: join not enough channels")
 )
 
 // User ...
@@ -82,7 +82,7 @@ func NewClientWithOpts(conn net.Conn, user *User, options *ClientOpts) *Client {
 // and handle them with provided handler. If no handler is passed it panics.
 func (c *Client) ListenAndReply() {
 	if c.handler == nil {
-		panic("antagonist: handler is nil")
+		panic("relay: handler is nil")
 	}
 
 	go c.listen(c.handler)

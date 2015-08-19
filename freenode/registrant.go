@@ -1,8 +1,6 @@
 package freenode
 
 import (
-	"log"
-
 	"github.com/piotrkowalczuk/relay"
 	"github.com/sorcix/irc"
 )
@@ -38,10 +36,6 @@ func (r *Registrant) Register(c *relay.Client) error {
 		Command: irc.NICK,
 		Params:  []string{c.User.Nick},
 	}
-
-	log.Printf("%+v", pass)
-	log.Printf("%+v", user)
-	log.Printf("%+v", nick)
 
 	if err := c.Encode(pass); err != nil {
 		return err

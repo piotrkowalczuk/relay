@@ -6,8 +6,8 @@ import (
 )
 
 var (
-// errLackOfMatchingHandlers is returned by handler when there is no matching handler in a map,
-	errLackOfMatchingHandlers = errors.New("antagonist: lack of matching handlers")
+	// errLackOfMatchingHandlers is returned by handler when there is no matching handler in a map,
+	errLackOfMatchingHandlers = errors.New("relay: lack of matching handlers")
 )
 
 // ServeMux is an IRC request multiplexer. It matches the IRC command of each incoming request
@@ -33,13 +33,13 @@ func (sm *ServeMux) Handle(command string, handler Handler) {
 	defer sm.mu.RUnlock()
 
 	if command == "" {
-		panic("antagonist: missing command")
+		panic("relay: missing command")
 	}
 	if handler == nil {
-		panic("antagonist: nil handler")
+		panic("relay: nil handler")
 	}
 	if _, exists := sm.handlers[command]; exists {
-		panic("antagonist: multiple registrations for " + command)
+		panic("relay: multiple registrations for " + command)
 	}
 
 	sm.handlers[command] = handler

@@ -3,8 +3,8 @@ package action
 import "errors"
 
 var (
-// ErrEmptyInput ...
-	ErrEmptyInput = errors.New("antagonist/action: empty input")
+	// ErrEmptyInput ...
+	ErrEmptyInput = errors.New("relay/action: empty input")
 )
 
 // Param ...
