@@ -133,7 +133,7 @@ func (c *Client) listen(h Handler) {
 					Message: message,
 				}
 
-				return
+				continue
 			}
 
 			if c.IsRegistered() {
